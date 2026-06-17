@@ -14,6 +14,13 @@ class Led:
     def unplot(x: int, y: int) -> None:
         global leds_matrix;
         leds_matrix[x][y] = '.';
+        # led.unplot(x,y)
+
+    @staticmethod
+    def plot_brightness(x: int, y: int, bright: int) -> None:
+        Led.plot(x,y)
+        # led.plot_brightness(*args)
+
 
 
 class UserPlatform:
