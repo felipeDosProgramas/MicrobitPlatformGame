@@ -20,8 +20,18 @@ class Led:
     def plot_brightness(x: int, y: int, bright: int) -> None:
         Led.plot(x,y)
         # led.plot_brightness(*args)
-
-
+    @staticmethod
+    def plot_briefly(x: int, y: int):
+        i = 0
+        for _ in range(3):
+            i += 1
+            Led.plot_brightness(x, y, (85 * i))
+            basic.pause(50)
+        for _ in range(3):
+            i -= 1
+            Led.plot_brightness(x, y, (85 * i))
+            basic.pause(50)
+        Led.unplot(x,y);
 
 class UserPlatform:
     def __init__(self):
