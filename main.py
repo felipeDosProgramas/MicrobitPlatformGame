@@ -1,136 +1,116 @@
-from collections.abc import Callable;
 from random import randint
 import time
 
-def get_initial_leds_matrix() -> list[list[str]]:
-    return [
-        ['.', '.', '.','.','.'],
-        ['.', '.', '.', '.', '.'],
-        ['.', '.', '.', '.', '.'],
-        ['.', '.', '.', '.', '.'],
-        ['.', '.', '.', '.', '.']
-    ];
 
 class basic:
     @staticmethod
     def pause(ms):
-        time.sleep(ms);
+        time.sleep(ms)
 
 def print_leds_matrix(matrix: list[list[str]]) -> None:
-    final_str = "";
+    final_str = ""
     for row in matrix:
         final_str += " ".join(row) + "\n"
-    print(final_str);
+    print(final_str)
 
+class CartesianPosition:
+    __position = (0,0)
+    @property
+    def x(self): return self.__position[0]
 
-leds_matrix: LedsMatrixType = get_initial_leds_matrix();
+    @property
+    def y(self): return self.__position[1]
+
+    def set_position(self, x: int, y: int):
+        self.__position = (x, y)
 
 class Led:
-    @staticmethod
-    def plot(x: int, y: int):
-        global leds_matrix;
-        leds_matrix[x][y] = '#';
-        # led.plot(x,y);
+    def __init__(self):
+        self.leds_matrix = ['. . . . .'.split() for _ in range(5)]
 
-    @staticmethod
-    def unplot(x: int, y: int):
-        global leds_matrix;
-        leds_matrix[x][y] = '.';
+    def plot(self, x: int, y: int):
+        self.leds_matrix[x][y] = '#'
+        # led.plot(x,y)
+
+    def unplot(self, x: int, y: int):
+        self.leds_matrix[x][y] = '.'
         # led.unplot(x,y)
 
-    @staticmethod
-    def plot_brightness(x: int, y: int, bright: int):
-        Led.plot(x,y)
-        # led.plot_brightness(*args)
-    @staticmethod
-    def plot_briefly(x: int, y: int):
+    def plot_brightness(self, x: int, y: int, bright: int):
+        self.plot(x,y)
+        # led.plot_brightness(x, y, bright)
+
+    def plot_briefly(self, x: int, y: int):
         i = 0
         for _ in range(3):
             i += 1
-            Led.plot_brightness(x, y, (85 * i))
+            self.plot_brightness(x, y, (85 * i))
             basic.pause(50)
         for _ in range(3):
             i -= 1
-            Led.plot_brightness(x, y, (85 * i))
+            self.plot_brightness(x, y, (85 * i))
             basic.pause(50)
-        Led.unplot(x,y);
+        self.unplot(x,y)
 
-class UserPlatform:
-    def __init__(self):
-        self.__position: tuple[int, int] = (4, 2);
-        Led.plot(self.x, self.y);
-    @property
-    def x(self): return self.__position[0];
-    @property
-    def y(self): return self.__position[1];
+    def is_high(self, x: int, y: int) -> bool:
+        return self.leds_matrix[x][y] == '#'
+
+class UserPlatform(CartesianPosition):
+    def __init__(self, leds_manager_instance: Led):
+        self.set_position(4, 2)
+        self.leds_manager = leds_manager_instance
+        self.leds_manager.plot(self.x, self.y)
+
     def go_left(self):
         if (self.y - 1) == -1:
-            return;
-        Led.unplot(self.x, self.y);
-        self.__position = self.x, self.y - 1;
-        Led.plot(self.x, self.y);
+            return
+        self.leds_manager.unplot(self.x, self.y)
+        self.set_position(self.x, self.y - 1)
+        self.leds_manager.plot(self.x, self.y)
+
     def go_right(self):
         if (self.y + 1) == 5:
-            return;
-        Led.unplot(self.x, self.y);
-        self.__position = self.x, self.y + 1;
-        Led.plot(self.x, self.y);
+            return
+        self.leds_manager.unplot(self.x, self.y)
+        self.set_position(self.x, self.y + 1)
+        self.leds_manager.plot(self.x, self.y)
 
 
-class Enemy:
-    @staticmethod
-    def __new_position(enemies_counter: int = 0) -> tuple[int, int]|None:
-        if enemies_counter == 5: return None;
-        new_position: tuple[int, int] = 0, randint(0, 4);
-        return Enemy.__new_position(enemies_counter+1) \
-            if Enemy.has_enemy(new_position[0], new_position[1]) \
-            else new_position;
-    @staticmethod
-    def new():
-        enemy_position = Enemy.__new_position();
+class Enemy(CartesianPosition):
+    def __init__(self, leds_manager_instance: Led):
+        self.leds_manager = leds_manager_instance
+        enemy_position = self.__new_position()
         if enemy_position:
-            Led.plot(*enemy_position)
-    @staticmethod
-    def has_enemy(x: int, y: int) -> bool:
-        return leds_matrix[x][y] == '#';
-    @staticmethod
-    def kill_enemy(x: int, y: int):
-        Led.unplot(x, y);
+            self.set_position(*enemy_position)
+            self.leds_manager.plot(*enemy_position)
 
-class Bullet:
-    def __init__(self, platform: UserPlatform):
-        self.bullet_position = {"x": platform.x - 1, "y": platform.y};
-        self.__bullet_walk();
-    @property
-    def x(self):
-        return self.bullet_position["x"];
-    @property
-    def y(self):
-        return self.bullet_position["y"];
-    def __plot_bullet(self):
-        Led.plot_briefly(self.x, self.y);
+    def __new_position(self, enemies_counter: int = 0):
+        if enemies_counter == 5:
+            return None
+        new_position = 0, randint(0, 4)
+        return self.__new_position(enemies_counter+1) \
+            if self.leds_manager.is_high(new_position[0], new_position[1]) \
+            else new_position
+
+class Bullet(CartesianPosition):
+    def __init__(self, platform: UserPlatform, leds_manager_instance: Led):
+        self.set_position(platform.x - 1, platform.y)
+        self.leds_manager = leds_manager_instance
+        self.walk()
     def __is_collision_with_enemy(self) -> bool:
-        if Enemy.has_enemy(self.x, self.y):
-            Enemy.kill_enemy(self.x, self.y)
+        if self.leds_manager.is_high(self.x, self.y): # If it has enemy
+            self.leds_manager.unplot(self.x, self.y) # Kills it
             return True
         return False
 
-    def __bullet_walk(self):
-        while self.x != 0:
-            self.bullet_position["x"] -= 1;
-            if self.__is_collision_with_enemy(): break;
-            self.__plot_bullet()
+    def walk(self) -> bool:
+        if self.x == 0: return False # Reached last row
+        self.set_position(self.x - 1, self.y) # MicroPython doesn't understand python's setters/getters properly
+        if self.__is_collision_with_enemy(): return False
+        self.leds_manager.plot_briefly(self.x, self.y) # Plot bullet's led
+        return True
 
-if __name__ == '__main__':
-    platform = UserPlatform();
-    Enemy.new();
-    Enemy.new();
-    Enemy.new();
-    print_leds_matrix(leds_matrix);
-    print("__________________________________")
-    platform.go_right()
-    platform.go_right()
-    print_leds_matrix(leds_matrix);
-    print("__________________________________")
-    Bullet(platform)
-    print("__________________________________")
+def main():
+    leds_manager = Led()
+    user_platform = UserPlatform(leds_manager)
+    enemies: list[Enemy] = [Enemy(leds_manager) for _ in range(3)]
