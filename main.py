@@ -51,11 +51,13 @@ class Led:
         self.leds_matrix = ['. . . . .'.split() for _ in range(5)]
 
     def plot(self, position: CartesianPosition, character: str):
-        self.leds_matrix[position.x][position.y] = character
+        if self.leds_matrix[position.x][position.y] != character:
+            self.leds_matrix[position.x][position.y] = character
         # led.plot(x,y)
     def unplot(self, position: CartesianPosition):
         self.leds_matrix[position.x][position.y] = ObjectCharactersEnum.EMPTY
         # led.unplot(x,y)
+
 
 class UserPlatform(CartesianMove):
     def __init__(self):
@@ -83,7 +85,7 @@ class EnemiesFactory:
     def __init__(self):
         self.enemies = []
         self.killed_enemies = []
-        self.enemies_empty_slots: list[int] = [0,1,2,3,4] # list(range(5)) doesn't works on MicroPython
+        self.empty_enemy_slots: list[int] = [0, 1, 2, 3, 4] # list(range(5)) doesn't works on MicroPython
 
     def new_enemy(self):
         new_enemy_position = self.__new_position()
@@ -92,30 +94,19 @@ class EnemiesFactory:
     def __new_position(self):
         return CartesianPosition(
             0,
-            self.enemies_empty_slots.pop(
-                randint(0, len(self.enemies_empty_slots) - 1)
+            self.empty_enemy_slots.pop(
+                randint(0, len(self.empty_enemy_slots) - 1)
             )
         )
     def kill_enemy(self, enemy: Enemy):
-        self.enemies_empty_slots.append(enemy.y)
+        self.empty_enemy_slots.append(enemy.y)
         self.enemies.remove(enemy)
         self.killed_enemies.append(enemy)
 
-    def check_enemies(self, position: CartesianPosition) -> bool:
+    def check_enemies(self, position: CartesianPosition):
         for enemy in self.enemies:
             if enemy.is_on_position(position):
                 self.kill_enemy(enemy)
-                return True
-        return False
-
-    def render_enemies(self, leds_manager: Led):
-        for enemy in self.enemies:
-            leds_manager.plot(enemy, ObjectCharactersEnum.ENEMY)
-
-    def flush_dead_enemies(self, leds_manager: Led):
-        for enemy in self.killed_enemies:
-            leds_manager.unplot(enemy)
-        self.killed_enemies = []
 
 
 class Bullet(CartesianMove):
@@ -134,11 +125,11 @@ class BulletsFactory:
     def new_bullet(self, new_bullet_position: CartesianPosition):
         self.bullets.append(Bullet(new_bullet_position))
 
-    def update_bullets(self, enemies_factory: EnemiesFactory):
+    def update_bullets(self):
         self.dead_bullet_indexes = []
         for bullet_index in range(len(self.bullets)):
             self.bullets[bullet_index].walk()
-            if enemies_factory.check_enemies(self.bullets[bullet_index]) or self.bullets[bullet_index].x == 0:
+            if self.bullets[bullet_index].x == 0:
                 self.dead_bullet_indexes.append(bullet_index)
 
     def clear_killed_bullets(self):
@@ -146,24 +137,41 @@ class BulletsFactory:
             self.bullets.pop(dead_bullet_index)
 
 
-class Game:
+class AbstractGame:
     def __init__(self):
         self._player = UserPlatform()
         self._object_renderer = Led()
         self._bullets_factory = BulletsFactory()
+        self._enemies_factory = EnemiesFactory()
 
-class GameRenderer(Game):
+class GameUpdater(AbstractGame):
+    def update(self):
+        for bullet_index in reversed(self._bullets_factory.dead_bullet_indexes):
+            self._enemies_factory.check_enemies(self._bullets_factory.bullets[bullet_index])
+
+class GameRenderer(GameUpdater):
+    def __render_enemies(self):
+        for enemy in self._enemies_factory.enemies:
+            self._object_renderer.plot(enemy, ObjectCharactersEnum.ENEMY)
+        for killed_enemy in self._enemies_factory.killed_enemies:
+            self._object_renderer.unplot(killed_enemy)
+        self._enemies_factory.killed_enemies = []
+
     def __render_player(self):
         for player_movement in self._player.tick_movements:
             self._object_renderer.unplot(player_movement.position_before_move)
             self._object_renderer.plot(player_movement.position_after_move, ObjectCharactersEnum.PLAYER)
         self._player.tick_movements = []
+
     def __render_bullets(self):
         for dead_bullet_index in self._bullets_factory.dead_bullet_indexes:
             self._object_renderer.unplot(self._bullets_factory.bullets[dead_bullet_index])
         self._bullets_factory.clear_killed_bullets()
         for bullet in self._bullets_factory.bullets:
             self._object_renderer.plot(bullet, ObjectCharactersEnum.BULLET)
+
     def render(self):
         self.__render_player()
         self.__render_bullets()
+        self.__render_enemies()
+
