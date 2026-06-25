@@ -1,11 +1,4 @@
 from random import randint
-import time
-
-
-class basic:
-    @staticmethod
-    def pause(ms):
-        time.sleep(ms/1000)
 
 def print_leds_matrix(matrix: list[list[str]]) -> None:
     final_str = ""
@@ -22,8 +15,10 @@ class ObjectCharactersEnum:
     DEFAULT= '#'
 
 class CartesianPosition:
-    __position  = (0,0)
-    __char: ObjectCharactersEnum = ObjectCharactersEnum.DEFAULT
+    __position: tuple[int, int]  = (0,0)
+    def __init__(self, x: int, y: int):
+        self.__position = x, y
+
     @property
     def x(self): return self.__position[0]
 
@@ -37,89 +32,118 @@ class Led:
     def __init__(self):
         self.leds_matrix = ['. . . . .'.split() for _ in range(5)]
 
-    def plot(self, x: int, y: int, char: str):
-        self.leds_matrix[x][y] = char
+    def plot(self, position: CartesianPosition, character: str):
+        self.leds_matrix[position.x][position.y] = character
         # led.plot(x,y)
-
-    def unplot(self, x: int, y: int):
-        self.leds_matrix[x][y] = '.'
+    def unplot(self, position: CartesianPosition):
+        self.leds_matrix[position.x][position.y] = ObjectCharactersEnum.EMPTY
         # led.unplot(x,y)
-
-    def plot_brightness(self, x: int, y: int, bright: int, char: str):
-        self.plot(x,y, char)
+    def plot_brightness(self, position: CartesianPosition, bright: int, char: str):
+        self.plot(position, char)
         # led.plot_brightness(x, y, bright)
 
-    def is_position_a(self, x: int, y: int, char: str) -> bool:
-        return self.leds_matrix[x][y] == char
+    def is_position_a(self,position: CartesianPosition , char: str) -> bool:
+        return self.leds_matrix[position.x][position.y] == char
 
 class UserPlatform(CartesianPosition):
     def __init__(self, leds_manager_instance: Led):
-        self.set_position(4, 2)
+        super().__init__(4, 2)
         self.leds_manager = leds_manager_instance
-        self.leds_manager.plot(self.x, self.y, ObjectCharactersEnum.PLAYER)
+        self.leds_manager.plot(self, ObjectCharactersEnum.PLAYER)
 
     def go_left(self):
         if (self.y - 1) == -1:
             return
-        self.leds_manager.unplot(self.x, self.y)
+        self.leds_manager.unplot(self)
         self.set_position(self.x, self.y - 1)
-        self.leds_manager.plot(self.x, self.y, ObjectCharactersEnum.PLAYER)
+        self.leds_manager.plot(self, ObjectCharactersEnum.PLAYER)
 
     def go_right(self):
         if (self.y + 1) == 5:
             return
-        self.leds_manager.unplot(self.x, self.y)
+        self.leds_manager.unplot(self)
         self.set_position(self.x, self.y + 1)
-        self.leds_manager.plot(self.x, self.y, ObjectCharactersEnum.PLAYER)
+        self.leds_manager.plot(self, ObjectCharactersEnum.PLAYER)
 
 
 class Enemy(CartesianPosition):
-    def __init__(self, leds_manager_instance: Led):
-        self.leds_manager = leds_manager_instance
-        enemy_position = self.__new_position()
-        if enemy_position:
-            self.set_position(enemy_position[0], enemy_position[1])
-            self.leds_manager.plot(*enemy_position)
+    def __init__(self, position: CartesianPosition):
+        super().__init__(position.x, position.y)
 
-    def __new_position(self, enemies_counter: int = 0):
-        if enemies_counter == 5:
-            return None
-        new_position= (0, randint(0, 4), ObjectCharactersEnum.ENEMY)
-        return self.__new_position(enemies_counter+1) \
-            if self.leds_manager.is_position_a(new_position[0], new_position[1], ObjectCharactersEnum.ENEMY) \
-            else new_position
+    def is_on_position(self, pos: CartesianPosition) -> bool:
+        return self.x == pos.x and self.y == pos.y
 
-class Bullet(CartesianPosition):
-    def __init__(self, platform: UserPlatform, leds_manager_instance: Led):
-        self.set_position(platform.x - 1, platform.y)
-        self.leds_manager = leds_manager_instance
-    def __is_collision_with_enemy(self) -> bool:
-        if self.leds_manager.is_position_a(self.x, self.y, ObjectCharactersEnum.ENEMY): # If it has enemy
-            self.leds_manager.unplot(self.x, self.y) # Kills it
-            return True
+class EnemiesFactory:
+    def __init__(self):
+        self.enemies = []
+        self.killed_enemies = []
+        self.enemies_empty_slots: list[int] = [0,1,2,3,4] # list(range(5)) doesn't works on MicroPython
+
+    def new_enemy(self):
+        new_enemy_position = self.__new_position()
+        self.enemies.append(Enemy(new_enemy_position))
+
+    def __new_position(self):
+        return CartesianPosition(
+            0,
+            self.enemies_empty_slots.pop(
+                randint(0, len(self.enemies_empty_slots) - 1)
+            )
+        )
+    def kill_enemy(self, enemy: Enemy):
+        self.enemies_empty_slots.append(enemy.y)
+        self.enemies.remove(enemy)
+        self.killed_enemies.append(enemy)
+
+    def check_enemies(self, position: CartesianPosition) -> bool:
+        for enemy in self.enemies:
+            if enemy.is_on_position(position):
+                self.kill_enemy(enemy)
+                return True
         return False
 
-    def walk(self) -> bool:
-        if self.x == 0: return False # Reached last row
-        if self.leds_manager.is_position_a(self.x, self.y, ObjectCharactersEnum.BULLET):
-            self.leds_manager.unplot(self.x, self.y)
+    def render_enemies(self, leds_manager: Led):
+        for enemy in self.enemies:
+            leds_manager.plot(enemy, ObjectCharactersEnum.ENEMY)
+
+    def flush_dead_enemies(self, leds_manager: Led):
+        for enemy in self.killed_enemies:
+            leds_manager.unplot(enemy)
+        self.killed_enemies = []
+
+
+class Bullet(CartesianPosition):
+    def __init__(self, position: CartesianPosition):
+        super().__init__(position.x - 1, position.y)
+
+    def walk(self):
         self.set_position(self.x - 1, self.y)
-        if self.__is_collision_with_enemy(): return False
-        self.leds_manager.plot(self.x, self.y, ObjectCharactersEnum.BULLET) # Plot bullet's led
-        return True
 
-def main():
-    leds_manager = Led()
-    user_platform = UserPlatform(leds_manager)
-    enemies: list[Enemy] = [Enemy(leds_manager) for _ in range(3)]
-    #user_input = input("A para esquerda, D para direita, W para atirar")
-    print_leds_matrix(leds_manager.leds_matrix)
-    b = Bullet(user_platform, leds_manager)
-    b.walk()
-    print_leds_matrix(leds_manager.leds_matrix)
-    b.walk()
-    print_leds_matrix(leds_manager.leds_matrix)
-    b.walk()
-    print_leds_matrix(leds_manager.leds_matrix)
 
-main()
+class BulletsFactory:
+    def __init__(self, leds_manager_instance: Led):
+        self.bullets: list[Bullet] = []
+        self.leds_manager = leds_manager_instance
+        self.dead_bullet_indexes: list[int] = []
+
+    def new_bullet(self, new_bullet_position: CartesianPosition):
+        self.bullets.append(Bullet(new_bullet_position))
+
+    def update_bullets(self, enemies_factory: EnemiesFactory):
+        for bullet_index in range(len(self.bullets)):
+            self.leds_manager.unplot(self.bullets[bullet_index])
+            self.bullets[bullet_index].walk()
+            if enemies_factory.check_enemies(self.bullets[bullet_index]) or self.bullets[bullet_index].x == 0:
+                self.dead_bullet_indexes.append(bullet_index)
+
+    def render_bullets(self):
+        for dead_bullet_index in reversed(self.dead_bullet_indexes):
+            self.bullets.pop(dead_bullet_index)
+        self.dead_bullet_indexes = []
+        for bullet in self.bullets:
+            self.leds_manager.plot(bullet, ObjectCharactersEnum.BULLET)
+
+
+
+
+
