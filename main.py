@@ -82,7 +82,6 @@ class Enemy(CartesianMove):
     def is_on_position(self, pos: CartesianPosition) -> bool:
         return self.x == pos.x and self.y == pos.y
 
-
 class EnemiesFactory:
     def __init__(self):
         self.enemies = []
@@ -124,6 +123,13 @@ class Bullet(CartesianMove):
     def walk(self):
         super().set_position(self.x - 1, self.y)
 
+def __check_enemy_y(enemy: Enemy, bullet: Bullet) -> bool:
+    return enemy.y == bullet.y
+def __check_enemies_area(enemy: Enemy, bullet: Bullet) -> bool:
+    return bullet.x < 2
+def __check_enemy_x(enemy: Enemy, bullet: Bullet) -> bool:
+    return enemy.x == bullet.x
+
 
 class BulletsFactory:
     def __init__(self):
@@ -138,10 +144,8 @@ class BulletsFactory:
         if bullet.x == -1:
             self.dead_bullet_indexes.append(bullet_index)
     def __check_for_enemies(self,bullet: Bullet, enemies_position: list[Enemy], bullet_index: int):
-        def __check_enemy(enemy: Enemy):
-            return enemy.x == bullet.x and enemy.y == bullet.y
         for enemy in enemies_position:
-            if __check_enemy(enemy):
+            if __check_enemy_y(enemy, bullet) and __check_enemies_area(enemy, bullet) and __check_enemy_x(enemy, bullet):
                 self.dead_bullet_indexes.append(bullet_index)
 
     def update_bullets(self, enemies_position: list[Enemy]):
