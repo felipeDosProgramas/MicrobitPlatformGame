@@ -87,7 +87,10 @@ class EnemiesFactory:
     def __init__(self):
         self.enemies = []
         self.killed_enemies = []
-        self.empty_enemy_slots = [0, 1, 2, 3, 4]  # list(range(5)) doesn't works on MicroPython
+        self.empty_enemy_slots =   [
+            0, 1, 2, 3, 4,
+            5, 6, 7, 8, 9
+        ]  # list(range(8)) doesn't works on MicroPython
 
     def new_enemy(self):
         new_enemy_position = self.__new_position()
@@ -96,7 +99,10 @@ class EnemiesFactory:
     def __new_position(self):
         enemy_slot_position_index = randint(0, len(self.empty_enemy_slots) - 1)
         new_y_position = self.empty_enemy_slots.pop(enemy_slot_position_index)
-        return CartesianPosition(0, new_y_position)  # this whole was in the same line
+        return CartesianPosition(
+            0 if new_y_position > 4 else 1,
+            new_y_position if new_y_position < 5 else new_y_position - 5
+        )  # this whole was in the same line
 
     def __kill_enemy_if_on_position(self, enemy: Enemy, position: CartesianPosition):
         if not enemy.is_on_position(position):
@@ -129,13 +135,20 @@ class BulletsFactory:
 
     def __update_bullet(self, bullet: Bullet, bullet_index: int):
         bullet.walk()
-        if bullet.x == 0:
+        if bullet.x == -1:
             self.dead_bullet_indexes.append(bullet_index)
+    def __check_for_enemies(self,bullet: Bullet, enemies_position: list[Enemy], bullet_index: int):
+        def __check_enemy(enemy: Enemy):
+            return enemy.x == bullet.x and enemy.y == bullet.y
+        for enemy in enemies_position:
+            if __check_enemy(enemy):
+                self.dead_bullet_indexes.append(bullet_index)
 
-    def update_bullets(self):
+    def update_bullets(self, enemies_position: list[Enemy]):
         self.dead_bullet_indexes = []
         for bullet_index in range(len(self.bullets)):
             self.__update_bullet(self.bullets[bullet_index], bullet_index)
+            self.__check_for_enemies(self.bullets[bullet_index], enemies_position, bullet_index)
 
     def clear_killed_bullets(self):
         for dead_bullet_index_i in range(len(self.dead_bullet_indexes) - 1, -1, -1):
@@ -153,7 +166,7 @@ class AbstractGame:
 
 class GameUpdater(AbstractGame):
     def update(self):
-        self._bullets_factory.update_bullets()
+        self._bullets_factory.update_bullets(self._enemies_factory.enemies)
         for bullet_index_i in range(len(self._bullets_factory.dead_bullet_indexes) - 1, -1, -1):
             self._enemies_factory.check_enemies(
                 self._bullets_factory.bullets[self._bullets_factory.dead_bullet_indexes[bullet_index_i]]
