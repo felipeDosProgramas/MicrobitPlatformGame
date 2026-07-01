@@ -49,14 +49,15 @@ class Led:
         ]
 
     def plot(self, position: CartesianPosition, character: str):
-        if self.leds_matrix[position.x][position.y] != character:
-            self.leds_matrix[position.x][position.y] = character
-        led.plot(position.x, position.y)
+        if not self.is_position_an(position, character):
+            self.leds_matrix[position.y][position.x] = character
+        led.plot(position.y, position.x)
 
     def unplot(self, position: CartesianPosition):
-        self.leds_matrix[position.x][position.y] = ObjectCharactersEnum.EMPTY
-        led.unplot(position.x, position.y)
-
+        self.leds_matrix[position.y][position.x] = ObjectCharactersEnum.EMPTY
+        led.unplot(position.y, position.x)
+    def is_position_an(self, position: CartesianPosition, character: str) -> bool:
+        return self.leds_matrix[position.y][position.x] == character
 
 class UserPlatform(CartesianMove):
     def __init__(self):
@@ -112,7 +113,7 @@ class EnemiesFactory:
 
 class Bullet(CartesianMove):
     def __init__(self, position: CartesianPosition):
-        super().__init__(position.x - 1, position.y)
+        super().__init__(position.x, position.y)
 
     def walk(self):
         super().set_position(self.x - 1, self.y)
@@ -123,8 +124,8 @@ class BulletsFactory:
         self.bullets = []
         self.dead_bullet_indexes = []
 
-    def new_bullet(self, new_bullet_position: CartesianPosition):
-        self.bullets.append(Bullet(new_bullet_position))
+    def new_bullet(self, player_position: CartesianPosition):
+        self.bullets.append(Bullet(player_position))
 
     def __update_bullet(self, bullet: Bullet, bullet_index: int):
         bullet.walk()
@@ -176,20 +177,23 @@ class GameRenderer(GameUpdater):
             self.__render_player_movement(player_movement)
         self._player.tick_movements = []
 
+    def __render_bullet_movement(self, bullet_movement: TickMovement):
+        if not self._object_renderer.is_position_an(
+            bullet_movement.position_before_move, ObjectCharactersEnum.PLAYER
+            ):
+            self._object_renderer.unplot(bullet_movement.position_before_move)
+        self._object_renderer.plot(bullet_movement.position_after_move, ObjectCharactersEnum.BULLET)
+
     def __render_bullet(self, bullet: Bullet):
         for bullet_movement in bullet.tick_movements:
             self.__render_bullet_movement(bullet_movement)
-
-    def __render_bullet_movement(self, bullet_movement: TickMovement):
-        self._object_renderer.unplot(bullet_movement.position_before_move)
-        self._object_renderer.plot(bullet_movement.position_after_move, ObjectCharactersEnum.BULLET)
-
     def __render_bullets(self):
         for bullet in self._bullets_factory.bullets:
             self.__render_bullet(bullet)
         for dead_bullet_index in self._bullets_factory.dead_bullet_indexes:
             self._object_renderer.unplot(self._bullets_factory.bullets[dead_bullet_index])
         self._bullets_factory.clear_killed_bullets()
+
 
     def render(self):
         self.__render_player()
@@ -205,20 +209,16 @@ class GameRun(GameRenderer):
         input.on_button_pressed() needs a function name, so I had
         to declare an inner function inside the method.
     """
-
     def __setup_left_movement_event(self):
         def go_left(): self._player.go_left()
-
         input.on_button_pressed(Button.A, go_left)
 
     def __setup_right_movement_event(self):
         def go_right(): self._player.go_right()
-
         input.on_button_pressed(Button.B, go_right)
 
     def __setup_shot_action_event(self):
         def shot(): self._bullets_factory.new_bullet(self._player)
-
         input.on_button_pressed(Button.AB, shot)
 
     def setup(self):
