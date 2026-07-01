@@ -93,13 +93,9 @@ class EnemiesFactory:
         self.enemies.append(Enemy(new_enemy_position))
 
     def __new_position(self):
-        pos = CartesianPosition(
-            0,
-            self.empty_enemy_slots.pop(
-                randint(0, len(self.empty_enemy_slots) - 1)
-            )
-        )
-        return pos
+        enemy_slot_position_index = randint(0, len(self.empty_enemy_slots) - 1)
+        new_y_position = self.empty_enemy_slots.pop(enemy_slot_position_index)
+        return CartesianPosition(0, new_y_position)  # this whole was in the same line
 
     def __kill_enemy_if_on_position(self, enemy: Enemy, position: CartesianPosition):
         if not enemy.is_on_position(position):
@@ -143,6 +139,7 @@ class BulletsFactory:
     def clear_killed_bullets(self):
         for dead_bullet_index_i in range(len(self.dead_bullet_indexes) - 1, -1, -1):
             self.bullets.pop(self.dead_bullet_indexes[dead_bullet_index_i])
+        self.dead_bullet_indexes = []
 
 
 class AbstractGame:
@@ -201,25 +198,68 @@ class GameRenderer(GameUpdater):
 
 
 class GameRun(GameRenderer):
-    def setup(self):
+    """
+        MicroPython doesn't understand Lambdas, and can't differentiate
+        a class property and a class method declaration:
+            self._player.go_left <-- he identifies it as a property
+        input.on_button_pressed() needs a function name, so I had
+        to declare an inner function inside the method.
+    """
+
+    def __setup_left_movement_event(self):
         def go_left(): self._player.go_left()
 
         input.on_button_pressed(Button.A, go_left)
 
+    def __setup_right_movement_event(self):
         def go_right(): self._player.go_right()
 
         input.on_button_pressed(Button.B, go_right)
 
+    def __setup_shot_action_event(self):
         def shot(): self._bullets_factory.new_bullet(self._player)
 
         input.on_button_pressed(Button.AB, shot)
 
-    def run(self):
+    def setup(self):
+        self.__setup_left_movement_event()
+        self.__setup_right_movement_event()
+        self.__setup_shot_action_event()
+
+    def level1(self):
+        self._enemies_factory.new_enemy()
+        self._enemies_factory.new_enemy()
+        self.__run()
+
+    def level2(self):
         self._enemies_factory.new_enemy()
         self._enemies_factory.new_enemy()
         self._enemies_factory.new_enemy()
+        self._enemies_factory.new_enemy()
+        self.__run()
+        self._enemies_factory.new_enemy()
+        self._enemies_factory.new_enemy()
+        self._enemies_factory.new_enemy()
+        self.__run()
+
+    def level3(self):
+        self._enemies_factory.new_enemy()
+        self._enemies_factory.new_enemy()
+        self._enemies_factory.new_enemy()
+        self._enemies_factory.new_enemy()
+        self.__run()
+        self._enemies_factory.new_enemy()
+        self._enemies_factory.new_enemy()
+        self._enemies_factory.new_enemy()
+        self.__run()
+        self._enemies_factory.new_enemy()
+        self._enemies_factory.new_enemy()
+        self._enemies_factory.new_enemy()
+        self.__run()
+
+    def __run(self):
         self.render()
-        while True:
+        while len(self._enemies_factory.enemies) != 0:
             basic.pause(300)
             self.update()
             self.render()
@@ -227,4 +267,7 @@ class GameRun(GameRenderer):
 
 gm = GameRun()
 gm.setup()
-gm.run()
+gm.level1()
+gm.level2()
+gm.level3()
+basic.show_string("Parabens!")
